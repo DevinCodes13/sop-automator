@@ -20,8 +20,11 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       ADMIN_EMAIL: ${ADMIN_EMAIL}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-haiku-5-5}
     volumes:
       - ./api/app:/code/app:Z
+      - models:/models
     ports:
       - "8000:8000"
     depends_on:
@@ -43,3 +46,4 @@ services:
 volumes:
   pgdata:
   web_node_modules:
+  models:

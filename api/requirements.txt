@@ -6,3 +6,6 @@ pyjwt
 pwdlib[argon2]
 slowapi
 python-multipart
+anthropic
+fastembed
+pgvector

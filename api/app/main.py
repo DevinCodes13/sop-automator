@@ -126,3 +126,8 @@ def create_api_key(
 @app.get("/api/integrations/ping")
 def integrations_ping(key: ApiKey = Depends(require_api_key)):
     return {"ok": True, "key_name": key.name}
+
+
+from .sops import router as sops_router  # noqa: E402
+
+app.include_router(sops_router)
