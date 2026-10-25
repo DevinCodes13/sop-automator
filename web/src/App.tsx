@@ -1,32 +1,46 @@
 import { useEffect, useState } from 'react'
-
-type Health = { api: string; db: string }
+import { api, getToken, setToken } from './api'
+import Login from './Login'
+import Staff from './Staff'
+import Student from './Student'
+import type { Me } from './types'
 
 export default function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [me, setMe] = useState<Me | null>(null)
+  const [loading, setLoading] = useState(Boolean(getToken()))
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(setHealth)
-      .catch((err) => setError(err.message))
+    if (!getToken()) return
+    api<Me>('/api/me')
+      .then(setMe)
+      .catch(() => setToken(null))
+      .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => {
+    const onLogout = () => setMe(null)
+    window.addEventListener('sop:logout', onLogout)
+    return () => window.removeEventListener('sop:logout', onLogout)
+  }, [])
+
+  function logout() {
+    setToken(null)
+    setMe(null)
+  }
+
+  if (loading) return <p className="center">Loading…</p>
+  if (!me) return <Login onLogin={setMe} />
+
   return (
-    <main style={{ fontFamily: 'system-ui', padding: '2rem' }}>
-      <h1>SOP Automator</h1>
-      {error && <p role="alert">Error: {error}</p>}
-      {!health && !error && <p>Checking system status…</p>}
-      {health && (
-        <ul>
-          <li>API: {health.api}</li>
-          <li>Database: {health.db}</li>
-        </ul>
-      )}
-    </main>
+    <div>
+      <header className="topbar">
+        <h1>SOP Automator</h1>
+        <div>
+          <span className="who">{me.email} · {me.role}</span>
+          <button className="link" onClick={logout}>Log out</button>
+        </div>
+      </header>
+      {me.role === 'student' ? <Student /> : <Staff />}
+    </div>
   )
 }

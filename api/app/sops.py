@@ -129,3 +129,20 @@ def list_workflows(sop_id: int, db: Session = Depends(get_db), _: User = Depends
         }
         for w in rows
     ]
+
+
+@router.get("")
+def list_sops(db: Session = Depends(get_db), _: User = Depends(current_user)):
+    out = []
+    for sop in db.scalars(select(Sop).order_by(Sop.id)).all():
+        latest = db.scalars(
+            select(Workflow).where(Workflow.sop_id == sop.id).order_by(Workflow.version.desc()).limit(1)
+        ).first()
+        out.append({
+            "id": sop.id,
+            "title": sop.title,
+            "latest_workflow_id": latest.id if latest else None,
+            "latest_version": latest.version if latest else None,
+            "prompt_version": latest.prompt_version if latest else None,
+        })
+    return out

@@ -139,3 +139,14 @@ def retry(run_id: int, from_start: bool = False, db: Session = Depends(get_db), 
     add_event(db, run, "retry", run.current_step, {"from_start": from_start}, user.id)
     advance(db, run, user.id)
     return run_out(db, run)
+
+
+@router.post("/runs/{run_id}/cancel")
+def cancel(run_id: int, db: Session = Depends(get_db), user: User = Depends(staff)):
+    run = locked_run(db, run_id)
+    if run.status in ("completed", "cancelled"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "This run is already finished")
+    run.status = "cancelled"
+    add_event(db, run, "cancelled", run.current_step, {}, user.id)
+    db.commit()
+    return run_out(db, run)
