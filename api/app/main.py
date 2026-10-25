@@ -131,3 +131,7 @@ def integrations_ping(key: ApiKey = Depends(require_api_key)):
 from .sops import router as sops_router  # noqa: E402
 
 app.include_router(sops_router)
+
+from .runs import router as runs_router  # noqa: E402
+
+app.include_router(runs_router)

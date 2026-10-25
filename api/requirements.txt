@@ -9,3 +9,5 @@ python-multipart
 anthropic
 fastembed
 pgvector
+httpx
+tzdata
