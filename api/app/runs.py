@@ -9,6 +9,7 @@ from .db import get_db
 from .models import User, now
 from .run_models import Run, RunEvent, Service, StudentCheckin
 from .runner import add_event, advance, school_today
+from .metrics import RUNS_FINISHED
 from .security import require_role
 from .sop_models import Workflow
 
@@ -147,6 +148,7 @@ def cancel(run_id: int, db: Session = Depends(get_db), user: User = Depends(staf
     if run.status in ("completed", "cancelled"):
         raise HTTPException(status.HTTP_409_CONFLICT, "This run is already finished")
     run.status = "cancelled"
+    RUNS_FINISHED.labels("cancelled").inc()
     add_event(db, run, "cancelled", run.current_step, {}, user.id)
     db.commit()
     return run_out(db, run)

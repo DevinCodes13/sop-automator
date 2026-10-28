@@ -22,6 +22,8 @@ services:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-haiku-5-5}
+      LLM_INPUT_USD_PER_MTOK: ${LLM_INPUT_USD_PER_MTOK:-0}
+      LLM_OUTPUT_USD_PER_MTOK: ${LLM_OUTPUT_USD_PER_MTOK:-0}
     volumes:
       - ./api/app:/code/app:Z
       - models:/models
@@ -43,7 +45,34 @@ services:
     depends_on:
       - api
 
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:Z
+      - prom_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - api
+
+  grafana:
+    image: grafana/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:Z
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:Z
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
   web_node_modules:
   models:
+  prom_data:
+  grafana_data:

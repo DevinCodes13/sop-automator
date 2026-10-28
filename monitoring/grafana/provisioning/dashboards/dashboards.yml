@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: sop
+    folder: SOP Automator
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

@@ -1,11 +1,15 @@
+import json
+import logging
 import time
 from typing import Literal
 
 import anthropic
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from .config import ANTHROPIC_API_KEY, CLAUDE_MODEL
+from .metrics import LLM_REQUESTS, record_llm_usage
 
+log = logging.getLogger("sop.ai")
 PROMPT_VERSION = "parse-v2"
 
 SYSTEM_PROMPT = """You turn written standard operating procedures (SOPs) into structured workflows.
@@ -51,28 +55,55 @@ def _get_client():
     return _client
 
 
+def _count(outcome: str):
+    LLM_REQUESTS.labels(CLAUDE_MODEL, PROMPT_VERSION, outcome).inc()
+
+
 def parse_sop(text: str):
     start = time.perf_counter()
-    resp = _get_client().messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=4000,
-        system=SYSTEM_PROMPT,
-        tools=[{
-            "name": "save_workflow",
-            "description": "Save the structured workflow parsed from the SOP.",
-            "input_schema": ParseResult.model_json_schema(),
-        }],
-        tool_choice={"type": "tool", "name": "save_workflow"},
-        messages=[{"role": "user", "content": f"<sop>\n{text}\n</sop>"}],
-    )
-    latency_ms = round((time.perf_counter() - start) * 1000)
+    try:
+        resp = _get_client().messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            tools=[{
+                "name": "save_workflow",
+                "description": "Save the structured workflow parsed from the SOP.",
+                "input_schema": ParseResult.model_json_schema(),
+            }],
+            tool_choice={"type": "tool", "name": "save_workflow"},
+            messages=[{"role": "user", "content": f"<sop>\n{text}\n</sop>"}],
+        )
+    except anthropic.APIError:
+        _count("api_error")
+        raise
+
+    latency_s = time.perf_counter() - start
+    cost = record_llm_usage(CLAUDE_MODEL, resp.usage.input_tokens, resp.usage.output_tokens, latency_s)
+    log.info(json.dumps({
+        "event": "llm_call",
+        "model": CLAUDE_MODEL,
+        "prompt_version": PROMPT_VERSION,
+        "input_tokens": resp.usage.input_tokens,
+        "output_tokens": resp.usage.output_tokens,
+        "latency_ms": round(latency_s * 1000),
+        "cost_usd": cost,
+    }))
+
     block = next((b for b in resp.content if b.type == "tool_use"), None)
     if block is None:
+        _count("no_workflow")
         raise ValueError("Model did not return a workflow")
-    result = ParseResult.model_validate(block.input)
+    try:
+        result = ParseResult.model_validate(block.input)
+    except ValidationError:
+        _count("rejected")
+        raise
+    _count("ok" if result.is_procedure else "not_procedure")
+
     usage = {
         "input_tokens": resp.usage.input_tokens,
         "output_tokens": resp.usage.output_tokens,
-        "latency_ms": latency_ms,
+        "latency_ms": round(latency_s * 1000),
     }
     return result, usage

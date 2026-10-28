@@ -5,6 +5,7 @@ import time
 import httpx
 
 from .config import FHIR_BASE_URL
+from .metrics import FHIR_REQUESTS, FHIR_RETRIES
 
 log = logging.getLogger("sop.fhir")
 IDENTIFIER_SYSTEM = "urn:sop-automator:intake"
@@ -29,6 +30,11 @@ def _patient_id(resp: httpx.Response) -> str | None:
     return None
 
 
+def _fail(message: str):
+    FHIR_REQUESTS.labels("failed").inc()
+    raise StepError(message)
+
+
 def create_patient(public_id: str, client_name: str, simulate_failures: int = 0) -> dict:
     body = {
         "resourceType": "Patient",
@@ -50,15 +56,17 @@ def create_patient(public_id: str, client_name: str, simulate_failures: int = 0)
             resp.raise_for_status()
             pid = _patient_id(resp)
             if not pid:
-                raise StepError("FHIR server didn't return a patient id")
+                _fail("FHIR server didn't return a patient id")
+            FHIR_REQUESTS.labels("ok").inc()
             return {"patient_id": pid, "created": resp.status_code == 201, "attempts": attempt}
         except httpx.HTTPStatusError as e:
             if e.response.status_code < 500:
-                raise StepError(f"FHIR rejected the request ({e.response.status_code})")
+                _fail(f"FHIR rejected the request ({e.response.status_code})")
             last_error = e
         except httpx.TransportError as e:
             last_error = e
+        FHIR_RETRIES.inc()
         log.warning(json.dumps({"event": "fhir_retry", "attempt": attempt, "error": str(last_error)}))
         if attempt < MAX_ATTEMPTS:
             time.sleep(2 ** (attempt - 1))
-    raise StepError(f"FHIR failed after {MAX_ATTEMPTS} tries: {last_error}")
+    _fail(f"FHIR failed after {MAX_ATTEMPTS} tries: {last_error}")

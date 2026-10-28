@@ -135,3 +135,11 @@ app.include_router(sops_router)
 from .runs import router as runs_router  # noqa: E402
 
 app.include_router(runs_router)
+
+from fastapi import Response  # noqa: E402
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # noqa: E402
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

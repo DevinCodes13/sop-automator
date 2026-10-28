@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from .config import SCHOOL_TZ
+from .metrics import RUNS_FINISHED, STEPS_TOTAL
 from .fhir import StepError, create_patient
 from .run_models import Run, RunEvent, Service, StudentCheckin
 from .sop_models import Workflow
@@ -89,13 +90,17 @@ def advance(db: Session, run: Run, user_id: int) -> Run:
             result = handler(db, run, step)
         except StepError as e:
             run.status = "failed"
+            RUNS_FINISHED.labels("failed").inc()
+            STEPS_TOTAL.labels(handler_name, "failed").inc()
             add_event(db, run, "step_failed", n, {"error": str(e)}, user_id)
             db.commit()
             return run
         add_event(db, run, "step_done", n, result, user_id)
+        STEPS_TOTAL.labels(handler_name, "done").inc()
         run.current_step = n + 1
         db.commit()
     run.status = "completed"
+    RUNS_FINISHED.labels("completed").inc()
     add_event(db, run, "run_completed", None, {}, user_id)
     db.commit()
     return run

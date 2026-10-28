@@ -6,6 +6,7 @@ from .config import DATABASE_URL
 engine = create_engine(
     DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1),
     pool_pre_ping=True,
+    connect_args={"connect_timeout": 3},
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
