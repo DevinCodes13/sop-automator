@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
+import FeedbackForm from './FeedbackForm'
 import StatusBadge from './StatusBadge'
 import type { Run, RunEvent } from './types'
 
@@ -29,6 +30,7 @@ export default function RunDetail({ id, onChange }: { id: number; onChange: () =
   const [run, setRun] = useState<Run | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [feedbackRow, setFeedbackRow] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -122,8 +124,22 @@ export default function RunDetail({ id, onChange }: { id: number; onChange: () =
             <span className="what">
               {EVENT_LABELS[e.event] ?? e.event}
               {e.event === 'step_started' ? `: ${String(e.detail.action ?? '')}` : ''}
+              {e.event === 'step_started' && e.step !== null && (
+                <button
+                  type="button"
+                  className="thumb"
+                  title="This step is wrong"
+                  aria-label={`Flag step ${e.step} as wrong`}
+                  onClick={() => setFeedbackRow(feedbackRow === i ? null : i)}
+                >
+                  👎
+                </button>
+              )}
             </span>
             <span className="detail">{describe(e)}</span>
+            {feedbackRow === i && e.step !== null && (
+              <FeedbackForm workflowId={run.workflow_id} runId={run.id} step={e.step} onClose={() => setFeedbackRow(null)} />
+            )}
           </li>
         ))}
       </ol>

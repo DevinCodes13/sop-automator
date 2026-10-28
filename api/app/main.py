@@ -143,3 +143,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest  # noqa: E402
 @app.get("/metrics", include_in_schema=False)
 def metrics():
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+from .feedback import router as feedback_router  # noqa: E402
+
+app.include_router(feedback_router)

@@ -25,7 +25,7 @@ services:
       LLM_INPUT_USD_PER_MTOK: ${LLM_INPUT_USD_PER_MTOK:-0}
       LLM_OUTPUT_USD_PER_MTOK: ${LLM_OUTPUT_USD_PER_MTOK:-0}
     volumes:
-      - ./api/app:/code/app:Z
+      - ./api:/code:Z
       - models:/models
     ports:
       - "8000:8000"
