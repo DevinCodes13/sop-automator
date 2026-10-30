@@ -3,6 +3,8 @@ import type { FormEvent } from 'react'
 import { api, errorMessage } from './api'
 import type { Run, SopSummary } from './types'
 
+const DEMO = import.meta.env.VITE_DEMO_MODE !== 'false'
+
 export default function NewRun({ onStarted }: { onStarted: (id: number) => void }) {
   const [sops, setSops] = useState<SopSummary[]>([])
   const [workflowId, setWorkflowId] = useState<number | ''>('')
@@ -18,7 +20,7 @@ export default function NewRun({ onStarted }: { onStarted: (id: number) => void 
       .then((list) => {
         const ready = list.filter((s) => s.latest_workflow_id !== null)
         setSops(ready)
-        const preferred = ready.find((s) => s.prompt_version === 'parse-v2') ?? ready[0]
+        const preferred = ready.find((s) => s.prompt_version === 'parse-v3') ?? ready[0]
         if (preferred?.latest_workflow_id) setWorkflowId(preferred.latest_workflow_id)
       })
       .catch((err) => setError(errorMessage(err)))
@@ -37,7 +39,7 @@ export default function NewRun({ onStarted }: { onStarted: (id: number) => void 
           client_name: clientName.trim(),
           cuts,
           payment,
-          simulate_fhir_failures: failures,
+          simulate_fhir_failures: DEMO ? failures : 0,
         }),
       })
       setClientName('')
@@ -78,15 +80,17 @@ export default function NewRun({ onStarted }: { onStarted: (id: number) => void 
             <option value="card">Card</option>
           </select>
         </label>
-        <label>
-          Demo: pretend server failures
-          <select value={failures} onChange={(e) => setFailures(Number(e.target.value))}>
-            <option value={0}>None</option>
-            <option value={1}>1</option>
-            <option value={2}>2</option>
-            <option value={3}>3 (will fail)</option>
-          </select>
-        </label>
+        {DEMO && (
+          <label>
+            Demo: pretend server failures
+            <select value={failures} onChange={(e) => setFailures(Number(e.target.value))}>
+              <option value={0}>None</option>
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3 (will fail)</option>
+            </select>
+          </label>
+        )}
         {error && <p className="error" role="alert">{error}</p>}
         <button disabled={busy || workflowId === ''}>{busy ? 'Starting…' : 'Start intake'}</button>
       </form>

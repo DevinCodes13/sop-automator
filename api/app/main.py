@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import ADMIN_EMAIL, ADMIN_PASSWORD, DATABASE_URL
-from .db import Base, SessionLocal, engine, get_db
+from .db import Base, SessionLocal, engine, get_db, wait_for_db
 from .middleware import RequestLogMiddleware
 from .models import ApiKey, User
 from .security import (
@@ -26,6 +26,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    wait_for_db()
     Base.metadata.create_all(engine)
     with SessionLocal() as db:
         if not db.scalar(select(User).where(User.email == ADMIN_EMAIL)):

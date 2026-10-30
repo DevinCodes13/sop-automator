@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from .config import DEMO_MODE
 from .db import get_db
 from .models import User, now
 from .run_models import Run, RunEvent, Service, StudentCheckin
@@ -78,6 +79,8 @@ def checkins_today(db: Session = Depends(get_db), _: User = Depends(staff)):
 
 @router.post("/runs", status_code=201)
 def start_run(body: RunCreate, db: Session = Depends(get_db), user: User = Depends(staff)):
+    if body.simulate_fhir_failures and not DEMO_MODE:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Pretend failures are turned off in production")
     workflow = db.get(Workflow, body.workflow_id)
     if not workflow:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Workflow not found")
