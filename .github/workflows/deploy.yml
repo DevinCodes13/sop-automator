@@ -1,0 +1,109 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+  OWNER: devincodes13
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          platforms: linux/arm64
+          push: true
+          build-args: VITE_DEMO_MODE=false
+          tags: |
+            ghcr.io/${{ env.OWNER }}/sop-automator-${{ matrix.service }}:${{ env.SHA }}
+            ghcr.io/${{ env.OWNER }}/sop-automator-${{ matrix.service }}:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Find the server
+        run: |
+          ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Project,Values=sop-automator" "Name=instance-state-name,Values=running" \
+            --query "Reservations[].Instances[].InstanceId" --output text)
+          if [ -z "$ID" ]; then echo "No running server. Did you run terraform apply?"; exit 1; fi
+          echo "INSTANCE_ID=$ID" >> "$GITHUB_ENV"
+
+      - name: Deploy over SSM (no SSH)
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "deploy ${SHA:0:7}" \
+            --timeout-seconds 600 \
+            --parameters "commands=[\"export HOME=/root\",\"cd /opt/sop-automator\",\"git fetch --quiet origin\",\"git checkout --quiet --force $SHA\",\"bash scripts/deploy.sh $SHA\"]" \
+            --query Command.CommandId --output text)
+          echo "SSM command: $CMD_ID"
+          STATUS=Pending
+          for i in $(seq 1 60); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || echo Pending)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+            sleep 10
+          done
+          echo "----- server output -----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query StandardOutputContent --output text
+          echo "----- server errors -----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query StandardErrorContent --output text
+          echo "Status: $STATUS"
+          [ "$STATUS" = "Success" ]
+
+      - name: Check the live site
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -m 10 https://sop.aws.vulntrack.app/api/health | grep -q '"db":"ok"'; then
+              echo "Live and healthy ✅"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Site not healthy"
+          exit 1
