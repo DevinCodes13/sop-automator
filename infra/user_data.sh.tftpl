@@ -1,0 +1,26 @@
+#!/bin/bash
+set -euxo pipefail
+
+# Docker + Compose
+dnf install -y docker git
+systemctl enable --now docker
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-aarch64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 2 GB swap as a safety net on a 2 GB server
+if [ ! -f /swapfile ]; then
+  dd if=/dev/zero of=/swapfile bs=1M count=2048
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo "/swapfile none swap sw 0 0" >> /etc/fstab
+fi
+
+# App code (configs only; images come from GitHub in 6C)
+if [ ! -d /opt/sop-automator ]; then
+  git clone ${repo_url} /opt/sop-automator
+fi
+
+date > /var/log/sop-bootstrap.done
