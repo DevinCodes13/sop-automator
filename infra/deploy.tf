@@ -1,6 +1,6 @@
 variable "github_repo" {
   type    = string
-  default = "DevinCodes13/sop-automator"
+  default = "DevinCodes13@306573762/sop-automator@1432746374"
 }
 
 locals {

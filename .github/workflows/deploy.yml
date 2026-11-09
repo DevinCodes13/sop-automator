@@ -60,8 +60,6 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Show the badge GitHub sends (labels only, no secrets)
-        run: python3 -c "import base64,json,os,urllib.request as u; r=u.Request(os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']+'&audience=sts.amazonaws.com',headers={'Authorization':'bearer '+os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']}); t=json.load(u.urlopen(r))['value'].split('.')[1]; c=json.loads(base64.urlsafe_b64decode(t+'='*(-len(t)%4))); [print(k+':',c.get(k)) for k in ('sub','aud','ref','event_name','repository')]"
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}

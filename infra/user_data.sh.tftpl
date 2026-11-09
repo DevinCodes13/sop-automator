@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euxo pipefail
 
+# Wait for internet before installing anything (avoids a boot-time race)
+for i in $(seq 1 30); do curl -fsS -m 5 https://github.com > /dev/null && break; sleep 10; done
+
 # Docker + Compose
 dnf install -y docker git
 systemctl enable --now docker
